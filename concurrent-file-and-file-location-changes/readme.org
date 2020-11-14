@@ -1,0 +1,322 @@
+* Advanced git rebase examples
+Imagine two feature branches:
+
+- feature-a-update-files-with-new-info
+- feature-b-organize-files
+
+What do you do when it comes time to merge both of these branches?
+
+Most of the places I've worked everyone (including me) either:
+
+1. manually replays changes from =feature-b= on top of =feature-a=.
+2. Is constantly on guard for work that could potentially conflict and avoids it like the plague
+
+Sometimes option 2 is too inconvenient when you really want to finish something though. Then after doing a large refactor, option 1 is the last thing you want to do.
+
+You just know that git should be able to handle this, but you've never sat down to understand exactly how. Sure, you've read (skimmed) Pro Git but you can't recall the intracacies of merging or rebasing.
+
+Maybe merge type can help? Octopus? Is that default?
+
+What options do we have?
+
+I wasn't sure until just 20 minutes ago and I found a potential solution:
+
+#+begin_src sh
+git rebase --onto
+#+end_src
+
+Let's explore and see if that does the trick! 
+
+* First we'll need to create a directory to put all of this in
+  #+begin_src sh :results silent
+  mkdir -p /tmp/try-rebase-onto
+  #+end_src
+* From within that directory we'll do everything else
+  :PROPERTIES:
+  :header-args: :dir /tmp/try-rebase-onto
+  :END:
+** Initialize the git repo 
+#+begin_src sh
+git init
+#+end_src
+
+#+RESULTS:
+: Initialized empty Git repository in /tmp/try-rebase-onto/.git/
+
+** Start with files a, b, c and fill them with "stuff"
+   
+#+begin_src sh
+echo "stuff a" > a
+echo "stuff b" > b
+echo "stuff c" > c
+#+end_src
+
+#+RESULTS:
+
+** make an initial commit and show it's diff
+#+begin_src sh
+git add .
+git commit -am "initial commit"
+#+end_src
+
+#+RESULTS:
+| [master | (root-commit) | d8b84f5] | initial | commit        |
+| 3       | files         | changed, | 3       | insertions(+) |
+| create  | mode          |   100644 | a       |               |
+| create  | mode          |   100644 | b       |               |
+| create  | mode          |   100644 | c       |               |
+
+#+begin_src sh :results verbatim
+git log -n 1 -p
+#+end_src
+
+#+RESULTS:
+#+begin_example
+commit d8b84f5be00bc96de72dd1058e9f2ebc99e36ea7
+Author: codygman <cody@codygman.dev>
+Date:   Sat Nov 14 12:45:58 2020 -0600
+
+    initial commit
+
+diff --git a/a b/a
+new file mode 100644
+index 0000000..849631b
+--- /dev/null
++++ b/a
+@@ -0,0 +1 @@
++stuff a
+diff --git a/b b/b
+new file mode 100644
+index 0000000..afd567f
+--- /dev/null
++++ b/b
+@@ -0,0 +1 @@
++stuff b
+diff --git a/c b/c
+new file mode 100644
+index 0000000..325f380
+--- /dev/null
++++ b/c
+@@ -0,0 +1 @@
++stuff c
+#+end_example
+
+** create =feature-a-update-files-with-new-info=
+*** create branch
+#+begin_src sh
+git checkout -b feature-a-update-files-with-new-info
+#+end_src
+
+#+RESULTS:
+
+*** update a,b,c
+#+begin_src sh
+echo "things a" >> a
+echo "things b" >> b
+echo "things c" >> c
+#+end_src
+
+#+RESULTS:
+
+*** commit
+#+begin_src sh
+git commit -am "add things to files a b, and c"
+#+end_src
+
+#+RESULTS:
+| [feature-a-update-files-with-new-info 69bd638] add things to files a b | and c           |
+| 3 files changed                                                        | 3 insertions(+) |
+ 
+*** switch back to master
+#+begin_src sh
+git checkout master
+#+end_src
+
+#+RESULTS:
+** create =feature-b-organize-files=
+*** create branch
+#+begin_src sh
+git checkout -b feature-b-organize-files
+#+end_src
+
+#+RESULTS:
+ 
+*** move files into =foo= subdirectory
+#+begin_src sh
+mkdir -p foo
+git mv a foo/
+git mv b foo/
+git mv c foo/
+#+end_src
+
+#+RESULTS:
+
+*** commit
+#+begin_src sh
+git commit -m "move a,b,c into foo"
+#+end_src
+
+#+RESULTS:
+| [feature-b-organize-files | 62e44e8] | move     | a,b,c | into           | foo |              |
+| 3                         | files    | changed, | 0     | insertions(+), |   0 | deletions(-) |
+| rename                    | a        | =>       | foo/a | (100%)         |     |              |
+| rename                    | b        | =>       | foo/b | (100%)         |     |              |
+| rename                    | c        | =>       | foo/c | (100%)         |     |              |
+
+*** switch back to master
+#+begin_src sh
+git checkout master
+#+end_src
+
+#+RESULTS:
+
+** make sure everything looks sane 
+*** we have two feature branches
+#+begin_src sh
+git branch
+#+end_src
+
+#+RESULTS:
+| feature-a-update-files-with-new-info |        |
+| feature-b-organize-files             |        |
+| *                                    | master |
+*** running cat recursively looks sane
+**** feature-a-update-files-with-new-info
+#+begin_src sh :results verbatim
+git checkout feature-a-update-files-with-new-info
+cat a
+cat b
+cat c
+#+end_src
+
+#+RESULTS:
+: stuff a
+: things a
+: stuff b
+: things b
+: stuff c
+: things c
+
+
+**** feature-b-organize-files 
+     
+#+begin_src sh :results verbatim
+git checkout feature-b-organize-files
+cat foo/a
+cat foo/b
+cat foo/c
+#+end_src
+
+#+RESULTS:
+: stuff a
+: stuff b
+: stuff c
+
+** create =merge-feature-a-feature-b= and try =git rebase --onto=
+*** create it  based on feature-b-organize-files
+#+begin_src sh
+git checkout -b merge-feature-a-feature-b
+#+end_src
+
+#+RESULTS:
+
+
+#+begin_src sh
+ls foo
+#+end_src
+
+#+RESULTS:
+| a |
+| b |
+| c |
+
+*** (didn't work) try to rebase =feature-a-update-files-with-new-info= on top of =feature-b-organize-files= within =merge-feature-a-feature-b=
+
+**** try it
+#+begin_src sh
+git rebase --onto feature-b-organize-files feature-a-update-files-with-new-info merge-feature-a-feature-b
+#+end_src
+
+#+RESULTS:
+
+
+**** where does that put us? did it work? No :/
+    
+#+begin_src sh
+git status
+#+end_src
+
+#+RESULTS:
+| On branch merge-feature-a-feature-b |                    |
+| nothing to commit                   | working tree clean |
+
+*** (works, requires contacting other dev) What if we create =copy-feature-b-1= and rebase =feature-a-update-files-with-new-info= on top of it?
+   
+ #+begin_src sh
+ git checkout feature-b-organize-files
+ git checkout -b copy-feature-b-1
+ #+end_src
+
+ #+RESULTS:
+
+ #+begin_src sh
+ git rebase feature-a-update-files-with-new-info
+ #+end_src
+
+ #+RESULTS:
+
+**** And we can see that "things a" added from =feature-a-update-files-with-new-info= has been replayed on =feature-b-organize-files= and everything is correct
+
+**** The only problem is that I think this rewrites history
+
+**** That means to avoid a force push you'd need to
+
+****** contact creator of =feature-b-organize-files= and get them to rebase your branch
+
+****** make sure you do it before they push
+
+**** Wait... does the other way around work?
+*** (works) What if we create =copy-feature-a-1= and rebase =feature-b-organize-files= on top of it?
+    
+#+begin_src sh
+git checkout feature-a-update-files-with-new-info
+git checkout -b copy-feature-a-1
+#+end_src
+
+#+RESULTS:
+
+#+begin_src sh :results verbatim
+ls & cat *
+#+end_src
+
+#+RESULTS:
+: a
+: b
+: c
+: stuff a
+: things a
+: stuff b
+: things b
+: stuff c
+: things c
+
+
+#+begin_src sh
+git rebase feature-b-organize-files
+#+end_src
+
+#+RESULTS:
+
+
+#+begin_src sh :results verbatim
+ls & cat foo/*
+#+end_src
+
+#+RESULTS:
+: stuff a
+: things a
+: foo
+: stuff b
+: things b
+: stuff c
+: things c
